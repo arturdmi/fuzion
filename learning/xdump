@@ -1,0 +1,34 @@
+Title: -XdumpFUIR crashes with IndexOutOfBoundsException on Call to a removed field (accessedClazz returns NO_CLAZZ)
+
+Reproducer
+
+fz -XdumpFUIR -e 'say (7.as_i64)'
+
+Observed
+
+java.lang.IndexOutOfBoundsException: Index -1 out of bounds for length 5539
+  at dev.flang.fuir.GeneratingFUIR.id2clazz(GeneratingFUIR.java:739)
+  at dev.flang.fuir.GeneratingFUIR.clazzOuterClazz(GeneratingFUIR.java:1077)
+  at dev.flang.fuir.FUIR.clazzNameWithArgsAndResult(FUIR.java:212)
+  at dev.flang.fuir.FUIR.codeAtAsString(FUIR.java:1159)
+  at dev.flang.fuir.FUIR.dumpCode(...)
+
+Root cause
+
+In FUIR.codeAtAsString, the Call branch builds its label via:
+
+java
+case Call -> ... clazzNameWithArgsAndResult(accessedClazz(s)) ...
+
+GeneratingFUIR.accessedClazz(s) legitimately returns NO_CLAZZ when the accessed field has been removed (see the res instanceof Clazz rc ? rc._id : NO_CLAZZ return at GeneratingFUIR.java:2431, and the note on assignedType at ~2551).
+
+clazzNameWithArgsAndResult has precondition cl >= firstClazz() and does not tolerate NO_CLAZZ. Since PRECONDITIONS is disabled in the build, -1 is not caught and propagates to clazzOuterClazz(-1) → id2clazz(-1) → IndexOutOfBoundsException.
+
+The parallel Assign branch does not crash because it uses clazzName(accessedClazz(s)), and clazzName tolerates NO_CLAZZ (prints -- no clazz --). The Call branch lacks the equivalent guard.
+
+Impact: dump-only. The program compiles and runs correctly without -XdumpFUIR.
+
+Proposed fix (either):
+
+Guard the Call branch in codeAtAsString for accessedClazz(s) == NO_CLAZZ, mirroring Assign.
+Make clazzNameWithArgsAndResult tolerate NO_CLAZZ (return clazzName(cl) early), fixing all callers.
