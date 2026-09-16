@@ -1,0 +1,4 @@
+say ([(1,"eins"),(2,"zwei")].as_map id)                          # orderable key -> ps_map
+say ((1..5).as_map x->(x, x*x))                                  # mapper without `_ _`
+say (["a","b"].as_map s->(s, s.byte_count))                      # String key
+say (container.hash_map i64 String .of ([(3,"drei")].map id))    # explicit Map type
