@@ -33,10 +33,15 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Optional;
 
+import dev.flang.ast.Feature;
+import dev.flang.ast.State;
 import dev.flang.ast.AbstractCall;
 import dev.flang.ast.AbstractFeature;
 import dev.flang.ast.AbstractType;
+import dev.flang.lsp.enums.TokenType;
+import dev.flang.lsp.shared.records.TokenInfo;
 import dev.flang.util.ANY;
 import dev.flang.util.HasSourcePosition;
 import dev.flang.util.SourcePosition;
@@ -89,6 +94,89 @@ public class IdentifierClassifier extends ANY
       .flatMap(t -> t.choiceGenerics().stream())
       .map(AbstractType::feature)
       .collect(Collectors.toSet());
+  }
+
+
+  /**
+   * The semantic token type of identifier token t, empty if unknown.
+   */
+  public Optional<TokenType> tokenType(TokenInfo t)
+  {
+    return _itemsAt
+      .getOrDefault(t.start().bytePos(), List.of())
+      .stream()
+      // skip generated items that happen to share the position
+      .filter(x -> t.text().equals(name(x)))
+      .findFirst()
+      .flatMap(this::tokenType);
+  }
+
+
+  private Optional<TokenType> tokenType(HasSourcePosition item)
+  {
+    return item instanceof AbstractCall c
+      ? tokenTypeOfCall(c)
+      : tokenTypeOfFeature((AbstractFeature) item);
+  }
+
+
+  private Optional<TokenType> tokenTypeOfCall(AbstractCall c)
+  {
+    if (c.isInheritanceCall())
+      {
+        return Optional.of(TokenType.Interface);
+      }
+    if (CallTool.isFixLikeCall(c))
+      {
+        return Optional.of(TokenType.Operator);
+      }
+    return tokenTypeOfFeature(c.calledFeature());
+  }
+
+
+  private Optional<TokenType> tokenTypeOfFeature(AbstractFeature af)
+  {
+    if (af instanceof Feature f && f.state() == State.ERROR)
+      {
+        return Optional.empty();
+      }
+    return Optional.of(switch (af.kind())
+      {
+      case ExplicitTypeParameter, FreeTypeParameter, OpenTypeParameter -> TokenType.TypeParameter;
+      case Field     -> FeatureTool.isArgument(af)                         ? TokenType.Parameter
+                      : af.outer() != null && !af.outer().isConstructor() ? TokenType.Variable   // local in a routine
+                      :                                                     TokenType.Property;
+      case Choice    -> TokenType.Enum;
+      case Native    -> TokenType.Method;
+      case Function, Intrinsic, Abstract, Constructor, RefConstructor -> routineType(af);
+      });
+  }
+
+
+  private TokenType routineType(AbstractFeature af)
+  {
+    if (af.isConstructor()
+        && af.valueArguments().isEmpty()
+        && af.code().containsOnlyDeclarations()
+        && !FeatureTool.doesInherit(af))
+      {
+        return ParserTool.declaredFeatures(af).findAny().isPresent() ? TokenType.Namespace
+             : _choiceMembers.contains(af)                           ? TokenType.EnumMember
+             :                                                         TokenType.Type;
+      }
+    return af.isConstructor()                                                        ? TokenType.Class
+         : FeatureTool.outerFeatures(af).allMatch(o -> o.valueArguments().isEmpty()) ? TokenType.Function
+         :                                                                             TokenType.Method;
+  }
+
+
+  /**
+   * Name of the feature as written in the source.  NYI: step 3 handles
+   * generated wrappers.
+   */
+  private static String name(HasSourcePosition x)
+  {
+    return FeatureTool.bareName(x instanceof AbstractCall c ? c.calledFeature() : (AbstractFeature) x);
   }
 
 
