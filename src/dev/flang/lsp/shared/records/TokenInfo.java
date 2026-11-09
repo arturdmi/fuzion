@@ -26,7 +26,6 @@ Fuzion language implementation.  If not, see <https://www.gnu.org/licenses/>.
 
 package dev.flang.lsp.shared.records;
 
-import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,6 +47,7 @@ public class TokenInfo extends ANY
 
   private SourcePosition _start;
 
+
   /**
    * @return the _start
    */
@@ -59,6 +59,7 @@ public class TokenInfo extends ANY
 
   private SourcePosition _end;
 
+
   /**
    * @return the _end
    */
@@ -69,6 +70,7 @@ public class TokenInfo extends ANY
 
 
   private String _text;
+
 
   /**
    * @return the _text
@@ -89,6 +91,7 @@ public class TokenInfo extends ANY
     return _token;
   }
 
+
   public TokenInfo(SourcePosition start, SourcePosition end, String text, Token token)
   {
     this._start = start;
@@ -99,6 +102,7 @@ public class TokenInfo extends ANY
       check(end.compareTo(start) >= 0);
   }
 
+
   /*
    * starting line of token, zero based
    */
@@ -106,6 +110,7 @@ public class TokenInfo extends ANY
   {
     return _start.line() == 0 ? 0: _start.line() - 1;
   }
+
 
   /*
   * startChar of token, zero based
@@ -124,6 +129,7 @@ public class TokenInfo extends ANY
       .sum();
   }
 
+
   /**
    * Takes into account that supplementary characters like
    * 😀 need twice the horizontal space and are thus counted as
@@ -136,60 +142,19 @@ public class TokenInfo extends ANY
 
 
   /**
-   * A simple entry whose equality is decided by comparing its key only.
-   */
-  private static class EntryEqualByKey<T1, T2> extends SimpleEntry<T1, T2>
-  {
-    public EntryEqualByKey(T1 key, T2 value)
-    {
-      super(key, value);
-    }
-
-    @Override
-    public boolean equals(Object arg0)
-    {
-      boolean result;
-
-      if (this == arg0)
-        {
-          result = true;
-        }
-      else if (!(arg0 instanceof EntryEqualByKey<?, ?> other))
-        {
-          result = false;
-        }
-      else
-        {
-          var key = this.getKey();
-          var otherKey = other.getKey();
-          result = (key == null ? otherKey == null : key.equals(otherKey));
-        }
-
-      return result;
-    }
-
-    @Override
-    public int hashCode()
-    {
-      return this.getKey().hashCode();
-    }
-  }
-
-
-  /**
    * Encode this token for LSP semantic tokens, relative to previousToken.
    *
-   * Callers must only pass tokens with isSemanticToken() == true, otherwise
-   * the relative positions of all following tokens would be wrong.
+   * previousToken must be the previously SENT token, otherwise the relative
+   * positions of all following tokens would be wrong.
+   *
+   * @param type the semantic token type, for identifiers this is determined
+   * from the AST, see IdentifierClassifier.
    */
-  public Stream<Integer> semanticTokenData(TokenInfo previousToken)
+  public Stream<Integer> semanticTokenData(TokenInfo previousToken, TokenType type)
   {
-    if (PRECONDITIONS) require
-      (isSemanticToken());
-
     int relativeLine = line() - previousToken.line();
     int relativeChar = startChar() - (isSameLine(previousToken) ? previousToken.startChar(): 0);
-    Integer tokenTypeNum = tokenType().orElseThrow().num;
+    Integer tokenTypeNum = type.num;
 
     if (ANY.CHECKS)
       ANY.check(relativeLine != 0 || relativeChar >= previousToken.charCount(),
@@ -209,18 +174,14 @@ public class TokenInfo extends ANY
     return line().equals(previousToken.line());
   }
 
-  /**
-   * Does this token have a semantic token type, i.e., is it sent to the client?
-   *
-   * Tokens without a type (whitespace, braces, identifiers for now) are left
-   * to the client's syntax grammar (TextMate).
-   */
-  public boolean isSemanticToken()
-  {
-    return tokenType().isPresent();
-  }
 
-  private Optional<TokenType> tokenType()
+  /**
+  * The semantic token type that follows from the lexer token alone.
+  *
+  * Empty for tokens that are not sent (whitespace, braces, ...) and for
+  * identifiers, which need the AST to be classified, see IdentifierClassifier.
+  */
+  public Optional<TokenType> tokenType()
   {
     return switch (_token)
       {
@@ -243,12 +204,6 @@ public class TokenInfo extends ANY
       };
   }
 
-  // NYI: UNDER DEVELOPMENT: move this somewhere better
-  public static Integer keyOf(SourcePosition pos)
-  {
-    // NYI: UNDER DEVELOPMENT: better key
-    return pos.line() * 1000 + pos.column();
-  }
 
   private static final Set<Token> leftBrackets =
     List.of(Token.t_lbrace, Token.t_lbracket, Token.t_lparen).stream().collect(Collectors.toUnmodifiableSet());

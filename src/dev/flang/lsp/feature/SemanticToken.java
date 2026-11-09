@@ -41,8 +41,10 @@ import dev.flang.lsp.enums.TokenModifier;
 import dev.flang.lsp.enums.TokenType;
 import dev.flang.lsp.shared.LexerTool;
 import dev.flang.lsp.shared.SourcePositionTool;
-import dev.flang.lsp.shared.Util;
+import dev.flang.lsp.shared.IdentifierClassifier;
+import dev.flang.lsp.shared.SourceText;
 import dev.flang.lsp.shared.records.TokenInfo;
+import dev.flang.lsp.shared.Util;
 import dev.flang.lsp.util.Bridge;
 import dev.flang.parser.Lexer.Token;
 import dev.flang.util.ANY;
@@ -54,17 +56,36 @@ public class SemanticToken extends ANY
   public static final SemanticTokensLegend Legend =
     new SemanticTokensLegend(TokenType.asList, TokenModifier.asList);
 
+  /**
+   * a lexer token together with the semantic token type it is sent as.
+   */
+  private record TypedToken(TokenInfo token, TokenType type) {}
+
   public static SemanticTokens getSemanticTokens(SemanticTokensParams params)
   {
-    return new SemanticTokens(semanticTokenData(lexerTokens(params)));
+    var start = Bridge.toSourcePosition(
+      new TextDocumentPositionParams(params.getTextDocument(), new Position(0, 0)));
+
+    // walks the AST once, so identifier lookups below are cheap
+    var identifiers = new IdentifierClassifier(SourceText.uriOf(start));
+
+    var tokens = lexerTokens(start)
+      .stream()
+      // drop tokens without semantic token type. Must happen BEFORE
+      // semanticTokenData since positions are encoded relative to the
+      // previously sent token.
+      .flatMap(t -> (t.token() == Token.t_ident ? identifiers.tokenType(t) : t.tokenType())
+                      .map(type -> new TypedToken(t, type))
+                      .stream())
+      .toList();
+
+    return new SemanticTokens(semanticTokenData(tokens));
   }
 
-  private static List<TokenInfo> lexerTokens(SemanticTokensParams params)
+  private static List<TokenInfo> lexerTokens(SourcePosition start)
   {
     return LexerTool
-      .tokensFrom(
-        Bridge.toSourcePosition(
-          new TextDocumentPositionParams(params.getTextDocument(), new Position(0, 0))))
+      .tokensFrom(start)
       // - map all special strings to normal strings plus operator(s)
       .flatMap(t -> {
         switch (t.token())
@@ -132,10 +153,6 @@ public class SemanticToken extends ANY
           ? Stream.of(t)
           : splitToken(t);
       })
-      // - drop tokens without semantic token type (e.g. t_ident, t_commaLimit).
-      //   Must happen before semanticTokenData since positions are encoded
-      //   relative to the previously sent token.
-      .filter(TokenInfo::isSemanticToken)
       .collect(Collectors.toList());
   }
 
@@ -162,19 +179,20 @@ public class SemanticToken extends ANY
       });
   }
 
-  private static List<Integer> semanticTokenData(List<TokenInfo> lexerTokens)
+  private static List<Integer> semanticTokenData(List<TypedToken> tokens)
   {
     return IntStream
-      .range(0, lexerTokens.size())
+      .range(0, tokens.size())
       .mapToObj(x -> {
+        var current = tokens.get(x).token();
         var beginningOfFileToken =
           new TokenInfo(
-            new SourcePosition(lexerTokens.get(x).start()._sourceFile, 0),
-            new SourcePosition(lexerTokens.get(x).start()._sourceFile, 0),
+            new SourcePosition(current.start()._sourceFile, 0),
+            new SourcePosition(current.start()._sourceFile, 0),
             "",
             Token.t_undefined);
-        var previousToken = x == 0 ? beginningOfFileToken: lexerTokens.get(x - 1);
-        return lexerTokens.get(x).semanticTokenData(previousToken);
+        var previousToken = x == 0 ? beginningOfFileToken: tokens.get(x - 1).token();
+        return current.semanticTokenData(previousToken, tokens.get(x).type());
       })
       .flatMap(x -> x)
       .collect(Collectors.toList());

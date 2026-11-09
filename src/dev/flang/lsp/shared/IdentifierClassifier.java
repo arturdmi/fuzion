@@ -1,12 +1,12 @@
 /*
 
-This file is part of the Fuzion language implementation.
+This file is part of the Fuzion language server protocol implementation.
 
-The Fuzion language implementation is free software: you can redistribute it
+The Fuzion language server protocol implementation is free software: you can redistribute it
 and/or modify it under the terms of the GNU General Public License as published
 by the Free Software Foundation, version 3 of the License.
 
-The Fuzion language implementation is distributed in the hope that it will be
+The Fuzion language server protocol implementation is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
 License for more details.
@@ -43,6 +43,7 @@ import dev.flang.ast.AbstractType;
 import dev.flang.lsp.enums.TokenType;
 import dev.flang.lsp.shared.records.TokenInfo;
 import dev.flang.util.ANY;
+import dev.flang.util.FuzionConstants;
 import dev.flang.util.HasSourcePosition;
 import dev.flang.util.SourcePosition;
 
@@ -130,7 +131,7 @@ public class IdentifierClassifier extends ANY
       {
         return Optional.of(TokenType.Operator);
       }
-    return tokenTypeOfFeature(c.calledFeature());
+    return tokenTypeOfFeature(feature(c));
   }
 
 
@@ -171,12 +172,36 @@ public class IdentifierClassifier extends ANY
 
 
   /**
-   * Name of the feature as written in the source.  NYI: step 3 handles
-   * generated wrappers.
+   * The feature a token at x's position refers to.
+   *
+   * `T.xyz` with type T used as a value is parsed as `type_as_value T`, so
+   * for such a call the feature is the type argument, not `type_as_value`.
+   */
+  private static AbstractFeature feature(HasSourcePosition x)
+  {
+    if (x instanceof AbstractCall c)
+      {
+        var f = c.calledFeature();
+        return f.qualifiedName().equals("type_as_value") && c.actualTypeParameters().size() == 1
+          ? c.actualTypeParameters().get(0).feature()
+          : f;
+      }
+    return (AbstractFeature) x;
+  }
+
+
+  /**
+   * Name of the feature as written in the source.
+   *
+   * Calls to features with preconditions go to a generated wrapper
+   * `#preandcall_<outer>#<name>`, strip that to get <name>.
    */
   private static String name(HasSourcePosition x)
   {
-    return FeatureTool.bareName(x instanceof AbstractCall c ? c.calledFeature() : (AbstractFeature) x);
+    var n = FeatureTool.bareName(feature(x));
+    return n.startsWith(FuzionConstants.PREANDCALLCONDITION_FEATURE_PREFIX)
+      ? n.substring(n.lastIndexOf(FuzionConstants.INTERNAL_NAME_SYMBOL) + 1)
+      : n;
   }
 
 
