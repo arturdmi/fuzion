@@ -127,7 +127,11 @@ public class C extends ANY
     }
 
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * The field is assigned without dynamic binding.
+     */
     @Override
     public CStmnt assignStatic(int s, int f, CExpr tvalue, CExpr val)
     {

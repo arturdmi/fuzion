@@ -94,7 +94,17 @@ public abstract class Constant extends Expr
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * visit all the expressions within this feature.
+   *
+   * @param v the visitor instance that defines an action to be performed on
+   * visited objects.
+   *
+   * @param outer the feature surrounding this expression.
+   *
+   * @return this or an alternative Expr if the action performed during the
+   * visit replaces this by the alternative.
+  */
   @Override
   protected Expr visit(FeatureVisitor v, AbstractFeature outer)
   {

@@ -177,7 +177,11 @@ class CodeGen
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * The field is assigned without dynamic binding.
+   */
   @Override
   public Expr assignStatic(int s, int f, Expr tvalue, Expr val)
   {
@@ -933,7 +937,14 @@ class CodeGen
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * The value is read from the local variable slot that contains the argument
+   * at the beginning of a call to the Java code of cl.
+   *
+   * @return code to read arg #i from its slot.
+   */
   @Override
   public Expr arg(int s, int i)
   {
@@ -1119,7 +1130,11 @@ class CodeGen
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * @return the code for the match, produces unit type result.
+   */
   @Override
   public Expr match(int s, AbstractInterpreter<Expr, Expr> ai, Expr sub)
   {
@@ -1127,7 +1142,10 @@ class CodeGen
   }
 
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc}
+   *
+   * @return code to produce the tagged value as a result.
+   */
   @Override
   public Pair<Expr, Expr> tag(int s, Expr value, int newcl, int tagNum)
   {

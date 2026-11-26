@@ -415,7 +415,12 @@ public abstract class UnresolvedType extends AbstractType implements HasSourcePo
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * Finds or creates the corresponding instance of ResolvedType of this and all
+   * outer types and type parameters this depends on.
+   */
   @Override
   AbstractType resolve(Resolution res, Context context)
   {
@@ -778,7 +783,11 @@ public abstract class UnresolvedType extends AbstractType implements HasSourcePo
   }
 
 
-  /** {@inheritDoc} */
+  /**
+   * {@inheritDoc}
+   *
+   * This is redefined here since feature might still be null while this type was not resolved yet.
+  */
   @Override
   boolean isCotypeType()
   {

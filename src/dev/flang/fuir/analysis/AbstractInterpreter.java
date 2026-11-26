@@ -76,7 +76,7 @@ public class AbstractInterpreter<VALUE, RESULT> extends ANY
      */
     public abstract RESULT sequence(List<RESULT> l);
 
-    /*
+    /**
      * Produce the unit type value.  This is used as a placeholder
      * for the universe instance as well as for the instance 'unit'.
      */
